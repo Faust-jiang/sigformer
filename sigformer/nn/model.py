@@ -20,7 +20,7 @@ from .layer import (
 )
 from .utils import split_key
 
-
+######### what does config mean here?
 Config = namedtuple(
     "Config",
     [
