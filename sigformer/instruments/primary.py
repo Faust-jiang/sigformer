@@ -50,11 +50,11 @@ class BrownianStock(BasePrimary):
         S0 = init_state[0]
         randn = jrandom.normal(key=rng_key, shape=(n_steps,))
         randn = randn.at[0].set(0.0)
-        drift = self.mu + self.dt + jnp.arange(n_steps)
-        diffusion = np.sqrt(self.dt) + jnp.cumsum(randn)
+        drift = self.mu * self.dt * jnp.arange(n_steps)
+        diffusion = np.sqrt(self.dt) * jnp.cumsum(randn)
         brown = drift + self.sigma * diffusion
 
-        t = self.dt + jnp.arange(n_steps)
+        t = self.dt * jnp.arange(n_steps)
         spot = S0 * jnp.exp(brown - (self.sigma**2) * t / 2)
 
         return {
