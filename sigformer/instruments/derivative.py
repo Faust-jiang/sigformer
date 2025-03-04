@@ -18,7 +18,7 @@ class BaseDerivative(BaseInstrument):
     cost: float
     maturity: float
     n_steps: int
-    pricer: Optional[Callable[[Any], Array]]
+    pricer: Optional[Callable[[Any], Array]] #pricer as an input comes first or the definition in the __init__ comes first? 
 
     def __init__(self) -> None:
         self.pricer = None
