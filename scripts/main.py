@@ -7,7 +7,7 @@ import numpy as np
 import optax
 import wandb
 from fire import Fire
-from plot_utils import plot_histogram
+from scripts.plot_utils import plot_histogram
 from sigformer.hedger import (
     DeepHedger,
     RBergomiDeltaHedger,
