@@ -239,7 +239,7 @@ class TensorLayerNorm(eqx.Module):
         self.norms = [nn.LayerNorm((dim,) * i) for i in range(1, order + 1)]
 
     def __call__(self, x: List[Array]) -> List[Array]:
-        return [norm(xx) for norm, xx in zip(self.norms, x)]
+        return [jax.vmap(norm)(xx) for norm, xx in zip(self.norms, x)]   ## i added this vmap function to make sure the dimension aligns
 
 
 class TensorDropout(eqx.Module):
