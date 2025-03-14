@@ -11,6 +11,7 @@ from jaxtyping import Array, Float
 from .layer import (
     LeadLagSignature,
     Signature,
+    RandSig,
     TensorAdd,
     TensorDropout,
     TensorFlatten,
@@ -20,7 +21,7 @@ from .layer import (
 )
 from .utils import split_key
 
-######### what does config mean here?
+
 Config = namedtuple(
     "Config",
     [
@@ -134,7 +135,57 @@ class SigFormer(eqx.Module):
         x = jax.vmap(self.readout)(x)
 
         return x
+        
+###############################
 
+class RsigFormer(eqx.Module):
+
+    project: nn.Linear
+    signature: Signature
+    blocks: List[Block]
+    readout: nn.Linear
+    flatten: TensorFlatten
+
+    def __init__(self, config: Config, *, key: PRNGKey):
+        block_key, proj_key, readout_key = jrandom.split(key, 3)
+        in_dim = config.in_dim
+        out_dim = config.out_dim
+        dim = config.dim
+
+        self.project = nn.Linear(in_dim, dim, key=proj_key)
+        self.rsig = RandSig(depth=config.order)
+        blocks = []
+        for i in range(config.n_attn_blocks):
+            block = Block(config, key=jrandom.fold_in(block_key, i))
+            blocks.append(block)
+        self.blocks = blocks
+        self.flatten = TensorFlatten()
+        ###readout_in_dim = sum(config.dim ** (i + 1) for i in range(config.order))
+        self.readout = nn.Linear(config.order, out_dim, key=readout_key)
+
+    def __call__(
+        self, x: Float[Array, "seq_len in_dim"], *, key: PRNGKey
+    ) -> Float[Array, "seq_len out_dim"]:
+
+        x = jax.vmap(self.project)(x)
+        key_rsig, key_block = jrandom.split(key,2)
+        # compute signature
+        x = self.rsig(x, key=key_rsig )
+
+        for block in self.blocks:
+            key_block = split_key(key_block)
+            x = block(x, key=key_block)
+
+        x = self.flatten(x)
+
+        x = jax.vmap(self.readout)(x)
+
+        return x
+
+
+
+
+################################
 
 class SigFormer_v2(eqx.Module):
 
