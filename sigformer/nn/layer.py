@@ -396,3 +396,28 @@ class Signature(eqx.Module):
         x = jnp.pad(x, ((1, 0), (0, 0)), constant_values=self.basepoint)
         sig = signature(x, depth=self.depth, stream=True, flatten=False)
         return sig
+
+class RandSig(eqx.Module):
+    order: int = eqx.static_field()
+    def __init__(self, order: int=4 ) -> None:
+        self.order = order
+
+    def __call__(self, path: Float[Array, "seq_len dim"], key: PRNGKey):
+        if path.ndim==1:
+            path=path.reshape(-1,1)
+        dim=path.shape[1]   # one R^d path, with n x dim
+        n=path.shape[0]
+        #create the random matrix and bias
+        key_init, key_bias, key_matrix = jax.random.split(key,3)
+        Z_init=jax.random.normal(key=key_init,shape=(self.order,))  #define Z0
+        matrix_A= jax.random.normal(key=key_matrix,shape=(dim, self.order, self.order,))
+        bias_b=jax.random.normal(key=key_bias,shape=(dim,self.order))
+
+        def f(carry,i):
+            Z=carry + jnp.matmul(jax.nn.relu(matrix_A @ carry + bias_b ).transpose() , path[i+1]-path[i])
+
+            return Z,Z
+            
+        finalvalue, rsig=jax.lax.scan(f, Z_init, jnp.arange(n-1))
+        rsig_list=[]
+        return rsig_list.append(rsig)
