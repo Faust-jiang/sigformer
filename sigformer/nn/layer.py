@@ -420,4 +420,5 @@ class RandSig(eqx.Module):
             
         finalvalue, rsig=jax.lax.scan(f, Z_init, jnp.arange(n-1))
         rsig_list=[]
-        return rsig_list.append(rsig)
+        rsig_list.append(rsig)
+        return rsig_list
