@@ -59,6 +59,7 @@ def main(
     n_attn_heads=12,
     n_attn_blocks=5,
     signature_dim=6,
+    signature_depth=3,
     inputs=["LogMoneyness", "Volatility"],
     loss_type="quadratic",
     model_name="RsigFormer",  # either SigFormer, RNN, SignatureOnly, VanillaTransformer
