@@ -55,13 +55,13 @@ def main(
     S0=100.0,  # initial price
     K=100.0,  # strike
     # SigHedger
-    model_dim=3,
+    #model_dim=3,
     n_attn_heads=12,
     n_attn_blocks=5,
-    signature_depth=3,
+    signature_dim=6,
     inputs=["LogMoneyness", "Volatility"],
     loss_type="quadratic",
-    model_name="SigFormer",  # either SigFormer, RNN, SignatureOnly, VanillaTransformer
+    model_name="RsigFormer",  # either SigFormer, RNN, SignatureOnly, VanillaTransformer
     # DeepHedger
     recur_type="Recur",  # either "Recur", "SemiRecur", "NoRecur". Default is None indicates using `SigHedger` instead
     # traing
@@ -88,7 +88,7 @@ def main(
             "S0": S0,
             "K": K,
             "model_name": model_name,
-            "model_dim": model_dim,
+            "signature_dim": signature_dim,
             "n_attn_heads": n_attn_heads,
             "n_attn_blocks": n_attn_blocks,
             "signature_depth": signature_depth,
@@ -145,10 +145,23 @@ def main(
             inputs=inputs,
             hedge=hedge,
             criterion=loss_fn,
-            model_dim=model_dim,
+            signature_dim=signature_dim,
             n_attn_heads=n_attn_heads,
             n_attn_blocks=n_attn_blocks,
-            signature_depth=signature_depth,
+            order=signature_depth,
+            rng_key=model_key,
+        )
+    elif model_name == "RsigFormer":
+       
+        model = SigHedger(
+            derivative=derivative,
+            inputs=inputs,
+            hedge=hedge,
+            criterion=loss_fn,
+            signature_dim=signature_dim,
+            n_attn_heads=n_attn_heads,
+            n_attn_blocks=n_attn_blocks,
+            order=1,
             rng_key=model_key,
         )
     elif model_name == "SigFormer_v2":
