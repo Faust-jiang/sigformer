@@ -27,12 +27,13 @@ Config = namedtuple(
     [
         "in_dim",
         "out_dim",
-        "dim",
+        "signature_dim",
         "num_heads",
         "d_ff",
         "dropout",
         "n_attn_blocks",
-        "order",
+        "order",       # in sig it is the depth 
+        "hurst",
     ],
 )
 
@@ -52,7 +53,7 @@ class Block(eqx.Module):
     def __init__(self, config: Config, *, key: PRNGKey) -> None:
         attn_key, mlp_key = jrandom.split(key)
 
-        dim = config.dim
+        dim = config.signature_dim
         order = config.order
         dropout = config.dropout
         n_heads = config.num_heads
@@ -62,7 +63,7 @@ class Block(eqx.Module):
         self.attn_norm = TensorLayerNorm(dim, order)
 
         self.mlp_block = TensorMLP(
-            dim=dim, order=order, d_ff=dim * dim * 4, key=mlp_key
+            dim=dim, order=order, d_ff=dim * dim , key=mlp_key
         )
         self.mlp_norm = TensorLayerNorm(dim, order)
         self.dropout = TensorDropout(dropout)
@@ -104,7 +105,7 @@ class SigFormer(eqx.Module):
         block_key, proj_key, readout_key = jrandom.split(key, 3)
         in_dim = config.in_dim
         out_dim = config.out_dim
-        dim = config.dim
+        dim = config.signature_dim
 
         self.project = nn.Linear(in_dim, dim, key=proj_key)
         self.signature = Signature(depth=config.order)
@@ -140,8 +141,8 @@ class SigFormer(eqx.Module):
 
 class RsigFormer(eqx.Module):
 
-    project: nn.Linear
-    signature: Signature
+    #project: nn.Linear
+    rsig:RandSig = eqx.field(static = True)
     blocks: List[Block]
     readout: nn.Linear
     flatten: TensorFlatten
@@ -150,10 +151,13 @@ class RsigFormer(eqx.Module):
         block_key, proj_key, readout_key = jrandom.split(key, 3)
         in_dim = config.in_dim
         out_dim = config.out_dim
-        dim = config.dim
-
-        self.project = nn.Linear(in_dim, dim, key=proj_key)
-        self.rsig = RandSig(depth=config.order)
+        dim = config.signature_dim    #random sig dim
+        
+        #self.order = config.order
+        
+        #self.normalize = eqx.nn.LayerNorm(in_dim)
+        self.rsig = RandSig(order= dim, hurst= config.hurst ) 
+        
         blocks = []
         for i in range(config.n_attn_blocks):
             block = Block(config, key=jrandom.fold_in(block_key, i))
@@ -161,20 +165,24 @@ class RsigFormer(eqx.Module):
         self.blocks = blocks
         self.flatten = TensorFlatten()
         ###readout_in_dim = sum(config.dim ** (i + 1) for i in range(config.order))
-        self.readout = nn.Linear(config.order, out_dim, key=readout_key)
+        self.readout = nn.Linear(dim, out_dim, key=readout_key)
 
     def __call__(
         self, x: Float[Array, "seq_len in_dim"], *, key: PRNGKey
-    ) -> Float[Array, "seq_len out_dim"]:
-
-        x = jax.vmap(self.project)(x)
-        key_rsig, key_block = jrandom.split(key,2)
+    ) -> Float[Array, "seq_len out_dim"]:   
+        
+        #x = jax.vmap(self.project)(x)
+        #key_rsig, key_block = jrandom.split(key,2)
         # compute signature
-        x = self.rsig(x, key=key_rsig )
+        #if key is None:
+        seq_len=x.shape[0]
+        normalize=eqx.nn.LayerNorm((seq_len,))
+        x=jax.vmap(normalize,in_axes = 1,out_axes = 1)(x)
+        x = self.rsig(x)
 
         for block in self.blocks:
-            key_block = split_key(key_block)
-            x = block(x, key=key_block)
+            key_block = split_key(key)
+            x = block(x, key=key)
 
         x = self.flatten(x)
 
