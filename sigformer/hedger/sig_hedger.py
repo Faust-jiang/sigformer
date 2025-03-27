@@ -39,12 +39,14 @@ class SigHedger(BaseHedger):
         inputs,
         hedge=None,
         criterion=EntropyRiskMeasure(),
-        signature_depth=3,
-        model_dim=2,
+        signature_dim=6,    #3 if initial model is sigformer
+        order = 1,
+        #model_dim=2,
         n_attn_heads=1,
         n_attn_blocks=2,
-        d_ff=12,
+        d_ff=6,
         dropout=0.1,
+        hurst = 0.1,
         *,
         rng_key: jrandom.PRNGKey,
     ) -> None:
@@ -62,17 +64,18 @@ class SigHedger(BaseHedger):
         self.config = Config(
             in_dim=self.n_inputs,
             out_dim=self.n_outputs,
-            dim=model_dim,
+            signature_dim=signature_dim,          #used to be model-dim that is set to 2 to decrease the computation burden of signature
             num_heads=n_attn_heads,
             d_ff=d_ff,
             dropout=dropout,
             n_attn_blocks=n_attn_blocks,
-            order=signature_depth,
+            order=order,          #useful when the model is sigformer
+            hurst= hurst,
         )
         self.model = self.initialize_model(rng_key=rng_key)
 
     def initialize_model(self, rng_key: jrandom.PRNGKey) -> Callable[[Array], Array]:
-        model = SigFormer(config=self.config, key=rng_key)
+        model = RsigFormer(config=self.config, key=rng_key)   #here i changed the model to Rsig    
         return model
 
     def compute_hedge(
