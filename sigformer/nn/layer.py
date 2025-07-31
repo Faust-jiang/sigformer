@@ -399,26 +399,37 @@ class Signature(eqx.Module):
 
 class RandSig(eqx.Module):
     order: int = eqx.static_field()
-    def __init__(self, order: int=4 ) -> None:
+    Z_init: Array = eqx.static_field()
+    matrix_A: Array = eqx.static_field()
+    bias_b: Array = eqx.static_field()
+
+    def __init__(self, order: int = 4, seed: int = 6):
         self.order = order
+        key = jax.random.PRNGKey(seed)
+        key_init, key_bias, key_matrix = jax.random.split(key, 3)
 
-    def __call__(self, path: Float[Array, "seq_len dim"], key: PRNGKey):
-        if path.ndim==1:
-            path=path.reshape(-1,1)
-        dim=path.shape[1]   # one R^d path, with n x dim
-        n=path.shape[0]
-        #create the random matrix and bias
-        key_init, key_bias, key_matrix = jax.random.split(key,3)
-        Z_init=jax.random.normal(key=key_init,shape=(self.order,))  #define Z0
-        matrix_A= jax.random.normal(key=key_matrix,shape=(dim, self.order, self.order,))
-        bias_b=jax.random.normal(key=key_bias,shape=(dim,self.order))
+        self.Z_init = jax.random.normal(key_init, shape=(self.order,))
+        self.matrix_A = jax.random.normal(key_matrix, shape=(1, self.order, self.order))
+        self.bias_b = jax.random.normal(key_bias, shape=(1, self.order))
 
-        def f(carry,i):
-            Z=carry + jnp.matmul(jax.nn.relu(matrix_A @ carry + bias_b ).transpose() , path[i+1]-path[i])
+    def __call__(self, path: Float[Array, "seq_len dim"]):
+        if path.ndim == 1:
+            path = path.reshape(-1, 1)
 
-            return Z,Z
-            
-        finalvalue, rsig=jax.lax.scan(f, Z_init, jnp.arange(n-1))
-        rsig_list=[]
-        rsig_list.append(rsig)
-        return rsig_list
+        path = jnp.pad(path, ((1, 0), (0, 0)), constant_values=0)
+        dim = path.shape[1]
+        n = path.shape[0]
+
+        # Expand static params to match path dimensionality
+        matrix_A = jnp.broadcast_to(self.matrix_A, (dim, self.order, self.order))
+        bias_b = jnp.broadcast_to(self.bias_b, (dim, self.order))
+
+        def f(carry, i):
+            delta = path[i + 1] - path[i]
+            transformed = jax.nn.relu(jnp.einsum('dij,j->di', matrix_A, carry) + bias_b)
+            update = jnp.einsum('di,d->i', transformed, delta)
+            Z = carry + update
+            return Z, Z
+
+        final_val, rsig = jax.lax.scan(f, self.Z_init, jnp.arange(n - 1))
+        return [rsig]
