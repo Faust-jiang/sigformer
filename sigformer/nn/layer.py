@@ -412,24 +412,25 @@ class RandSig(eqx.Module):
         self.matrix_A = jax.random.normal(key_matrix, shape=(1, self.order, self.order))
         self.bias_b = jax.random.normal(key_bias, shape=(1, self.order))
 
-    def __call__(self, path: Float[Array, "seq_len dim"]):
-        if path.ndim == 1:
-            path = path.reshape(-1, 1)
+     def __call__(self, path: Float[Array, "seq_len dim"]):
+        if path.ndim==1:
+            path=path.reshape(-1,1)
+            
+        path= jnp.pad(path, ((1, 0), (0, 0)), constant_values=0)
+        dim=path.shape[1]   # one R^d path, with n x dim
+        n=path.shape[0]
+        #create the random matrix and bias
+        key = jrandom.PRNGKey(self.seed)
+        key_init, key_bias, key_matrix = jax.random.split(key,3)
+        Z_init=jax.random.normal(key=key_init,shape=(self.order,))  #define Z0
+        matrix_A= jax.random.normal(key=key_matrix,shape=(dim, self.order, self.order,))
+        bias_b=jax.random.normal(key=key_bias,shape=(dim,self.order))
 
-        path = jnp.pad(path, ((1, 0), (0, 0)), constant_values=0)
-        dim = path.shape[1]
-        n = path.shape[0]
+        def f(carry,i):
+            Z=carry + jnp.matmul(jax.nn.relu(matrix_A @ carry + bias_b ).transpose() , path[i+1]-path[i])
 
-        # Expand static params to match path dimensionality
-        matrix_A = jnp.broadcast_to(self.matrix_A, (dim, self.order, self.order))
-        bias_b = jnp.broadcast_to(self.bias_b, (dim, self.order))
-
-        def f(carry, i):
-            delta = path[i + 1] - path[i]
-            transformed = jax.nn.relu(jnp.einsum('dij,j->di', matrix_A, carry) + bias_b)
-            update = jnp.einsum('di,d->i', transformed, delta)
-            Z = carry + update
-            return Z, Z
-
-        final_val, rsig = jax.lax.scan(f, self.Z_init, jnp.arange(n - 1))
+            return Z,Z
+            
+        finalvalue, rsig=jax.lax.scan(f, Z_init, jnp.arange(n-1))
+        
         return [rsig]
