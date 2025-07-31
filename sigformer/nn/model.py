@@ -142,11 +142,12 @@ class SigFormer(eqx.Module):
 class RsigFormer(eqx.Module):
 
     #project: nn.Linear
-    rsig:RandSig = eqx.field(static = True)
+    rsig:RandSig 
     blocks: List[Block]
     readout: nn.Linear
     flatten: TensorFlatten
-
+    norm: nn.LayerNorm
+    
     def __init__(self, config: Config, *, key: PRNGKey):
         block_key, proj_key, readout_key = jrandom.split(key, 3)
         in_dim = config.in_dim
@@ -156,7 +157,7 @@ class RsigFormer(eqx.Module):
         #self.order = config.order
         
         #self.normalize = eqx.nn.LayerNorm(in_dim)
-        self.rsig = RandSig(order= dim, hurst= config.hurst ) 
+        self.rsig = RandSig(order= dim ) 
         
         blocks = []
         for i in range(config.n_attn_blocks):
@@ -166,7 +167,8 @@ class RsigFormer(eqx.Module):
         self.flatten = TensorFlatten()
         ###readout_in_dim = sum(config.dim ** (i + 1) for i in range(config.order))
         self.readout = nn.Linear(dim, out_dim, key=readout_key)
-
+        self.norm = eqx.nn.LayerNorm((in_dim,))
+        
     def __call__(
         self, x: Float[Array, "seq_len in_dim"], *, key: PRNGKey
     ) -> Float[Array, "seq_len out_dim"]:   
@@ -176,12 +178,12 @@ class RsigFormer(eqx.Module):
         # compute signature
         #if key is None:
         seq_len=x.shape[0]
-        normalize=eqx.nn.LayerNorm((seq_len,))
-        x=jax.vmap(normalize,in_axes = 1,out_axes = 1)(x)
+        #normalize=eqx.nn.LayerNorm((seq_len,))
+        x=jax.vmap(self.norm,in_axes = 0,out_axes = 0)(x)
         x = self.rsig(x)
 
         for block in self.blocks:
-            key_block = split_key(key)
+            key = split_key(key)
             x = block(x, key=key)
 
         x = self.flatten(x)
