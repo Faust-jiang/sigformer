@@ -398,38 +398,63 @@ class Signature(eqx.Module):
         return sig
 
 class RandSig(eqx.Module):
-    order: int = eqx.static_field()
-    Z_init: Array = eqx.static_field()
-    matrix_A: Array = eqx.static_field()
-    bias_b: Array = eqx.static_field()
+    # Static (non‑JAX) configuration parameters
+    order: int             = eqx.static_field()
+    seed:  int             = eqx.static_field()
 
-    def __init__(self, order: int = 4, seed: int = 6):
-        self.order = order
-        key = jax.random.PRNGKey(seed)
-        key_init, key_bias, key_matrix = jax.random.split(key, 3)
+    # Frozen JAX arrays (not trainable)
+    Z_init:    Array
+    matrix_A:  Array
+    bias_b:    Array
 
-        self.Z_init = jax.random.normal(key_init, shape=(self.order,))
-        self.matrix_A = jax.random.normal(key_matrix, shape=(1, self.order, self.order))
-        self.bias_b = jax.random.normal(key_bias, shape=(1, self.order))
+    def __init__(self, *, dim: int, order: int = 4, seed: int = 6):
+        """
+        dim   : dimension of the input path (number of channels)
+        order : signature order
+        seed  : RNG seed, stored only for reproducibility
+        """
+        self.order, self.seed = order, seed
 
-    def __call__(self, path: Float[Array, "seq_len dim"]):
+        k_init, k_A, k_b = jax.random.split(jax.random.PRNGKey(seed), 3)
+
+        # one Z0 per call (shared across channels)
+        self.Z_init   = jax.lax.stop_gradient(
+            jax.random.normal(k_init, shape=(order,))
+        )
+
+        # separate weights per input channel
+        self.matrix_A = jax.lax.stop_gradient(
+            jax.random.normal(k_A, shape=(dim, order, order))
+        )
+        self.bias_b   = jax.lax.stop_gradient(
+            jax.random.normal(k_b, shape=(dim, order))
+        )
+
+
+    def __call__(self, path: Float[Array, " seq_len dim"]):
         if path.ndim == 1:
             path = path.reshape(-1, 1)
 
-        path = jnp.pad(path, ((1, 0), (0, 0)), constant_values=0)
-        dim = path.shape[1]
-        n = path.shape[0]
+        # prepend a zero so that Δx[t] = x[t] – x[t‑1] works from t=1
+        path = jnp.pad(path, ((1, 0), (0, 0)))          # (n+1, dim)
+        n, dim = path.shape[0] - 1, path.shape[1]
 
-        # Expand static params to match path dimensionality
-        matrix_A = jnp.broadcast_to(self.matrix_A, (dim, self.order, self.order))
-        bias_b = jnp.broadcast_to(self.bias_b, (dim, self.order))
+        # If the caller passed a path with fewer / more channels than we
+        # built the weights for, raise immediately.
+        if dim != self.matrix_A.shape[0]:
+            raise ValueError(
+                f"RandSig initialised for dim={self.matrix_A.shape[0]} "
+                f"but received path with dim={dim}"
+            )
 
-        def f(carry, i):
-            delta = path[i + 1] - path[i]
-            transformed = jax.nn.relu(jnp.einsum('dij,j->di', matrix_A, carry) + bias_b)
-            update = jnp.einsum('di,d->i', transformed, delta)
-            Z = carry + update
-            return Z, Z
+        def step(carry, t):
+            delta   = path[t + 1] - path[t]                       # (dim,)
+            relu    = jax.nn.relu(jnp.einsum("dij,j->di", self.matrix_A, carry) +
+                                   self.bias_b)                   # (dim, order)
+            update  = jnp.einsum("di,d->i", relu, delta)          # (order,)
+            carry   = carry + update
+            return carry, carry
 
-        final_val, rsig = jax.lax.scan(f, self.Z_init, jnp.arange(n - 1))
+        _, sig = jax.lax.scan(step, self.Z_init, jnp.arange(n))   # (n, order)
+                                                    
         return [rsig]
