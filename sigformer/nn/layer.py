@@ -455,6 +455,6 @@ class RandSig(eqx.Module):
             carry   = carry + update
             return carry, carry
 
-        _, sig = jax.lax.scan(step, self.Z_init, jnp.arange(n))   # (n, order)
+        _, rsig = jax.lax.scan(step, self.Z_init, jnp.arange(n))   # (n, order)
                                                     
         return [rsig]
