@@ -157,7 +157,7 @@ class RsigFormer(eqx.Module):
         #self.order = config.order
         
         #self.normalize = eqx.nn.LayerNorm(in_dim)
-        self.rsig = RandSig(dim = in_dim, order= order ) 
+        self.rsig = RandSig(dim= in_dim, order= order ) 
         
         blocks = []
         for i in range(config.n_attn_blocks):
