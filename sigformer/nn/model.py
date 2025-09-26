@@ -152,12 +152,12 @@ class RsigFormer(eqx.Module):
         block_key, proj_key, readout_key = jrandom.split(key, 3)
         in_dim = config.in_dim
         out_dim = config.out_dim
-        dim = config.signature_dim    #random sig dim
+        order = config.signature_dim    #random sig dim
         
         #self.order = config.order
         
         #self.normalize = eqx.nn.LayerNorm(in_dim)
-        self.rsig = RandSig(order= dim ) 
+        self.rsig = RandSig(dim = in_dim, order= order ) 
         
         blocks = []
         for i in range(config.n_attn_blocks):
