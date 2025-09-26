@@ -415,7 +415,7 @@ class RandSig(eqx.Module):
         seed  : RNG seed, stored only for reproducibility
         """
         self.order, self.seed = order, seed
-
+        self.dim = dim
         k_init, k_A, k_b = jax.random.split(jax.random.PRNGKey(seed), 3)
 
         # one Z0 per call (shared across channels)
@@ -425,10 +425,10 @@ class RandSig(eqx.Module):
 
         # separate weights per input channel
         self.matrix_A = jax.lax.stop_gradient(
-            jax.random.normal(k_A, shape=(dim, order, order))
+            jax.random.normal(k_A, shape=(self.dim, order, order))
         )
         self.bias_b   = jax.lax.stop_gradient(
-            jax.random.normal(k_b, shape=(dim, order))
+            jax.random.normal(k_b, shape=(self.dim, order))
         )
 
 
