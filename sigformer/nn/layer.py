@@ -399,6 +399,7 @@ class Signature(eqx.Module):
 
 class RandSig(eqx.Module):
     # Static (non‑JAX) configuration parameters
+    dim: int = eqx.static_field()
     order: int             = eqx.static_field()
     seed:  int             = eqx.static_field()
 
