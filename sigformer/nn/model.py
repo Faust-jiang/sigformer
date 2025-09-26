@@ -152,12 +152,12 @@ class RsigFormer(eqx.Module):
         block_key, proj_key, readout_key = jrandom.split(key, 3)
         in_dim = config.in_dim
         out_dim = config.out_dim
-        order = config.signature_dim    #random sig dim
+        rsig_dim = config.signature_dim    #random sig dim
         
         #self.order = config.order
         
         #self.normalize = eqx.nn.LayerNorm(in_dim)
-        self.rsig = RandSig(dim= in_dim, order= order ) 
+        self.rsig = RandSig(dim= in_dim, order= rsig_dim ) 
         
         blocks = []
         for i in range(config.n_attn_blocks):
@@ -166,7 +166,7 @@ class RsigFormer(eqx.Module):
         self.blocks = blocks
         self.flatten = TensorFlatten()
         ###readout_in_dim = sum(config.dim ** (i + 1) for i in range(config.order))
-        self.readout = nn.Linear(dim, out_dim, key=readout_key)
+        self.readout = nn.Linear(rsig_dim, out_dim, key=readout_key)
         self.norm = eqx.nn.LayerNorm((in_dim,))
         
     def __call__(
